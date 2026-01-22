@@ -1,0 +1,12 @@
+{
+    "name": "symone-dashboard-prod",
+    "buildCommand": "npm run build:app",
+    "outputDirectory": "dist-app",
+    "framework": "vite",
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
+}
