@@ -19,12 +19,7 @@ export default defineConfig(({ mode }) => ({
         },
     },
     build: {
-        outDir: "dist-app",
-        rollupOptions: {
-            input: {
-                main: path.resolve(__dirname, "index.html"),
-            },
-        },
+        outDir: "dist",
     },
     define: {
         '__BUILD_TARGET__': JSON.stringify('app'),
