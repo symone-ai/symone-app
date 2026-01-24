@@ -137,11 +137,13 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <DropdownMenuTrigger asChild>
                 <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent/50 cursor-pointer transition-colors">
                   <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="text-sm font-semibold text-primary">{user?.avatar || 'JD'}</span>
+                    <span className="text-sm font-semibold text-primary">
+                      {user?.avatar || (user?.firstName ? user.firstName[0] : 'U')}
+                    </span>
                   </div>
                   <div className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-medium text-foreground truncate">
-                      {user ? `${user.firstName} ${user.lastName}` : 'Loading...'}
+                      {user ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Loading...'}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">Team Plan</p>
                   </div>
@@ -151,7 +153,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <div className="flex flex-col">
-                    <span>{user ? `${user.firstName} ${user.lastName}` : 'User'}</span>
+                    <span>{user ? `${user.firstName} ${user.lastName || ''}`.trim() : 'User'}</span>
                     <span className="text-xs font-normal text-muted-foreground">
                       {user?.email || 'user@example.com'}
                     </span>

@@ -974,11 +974,17 @@ export const user = {
     return data;
   },
 
-  signup: async (email: string, password: string, name: string) => {
+  signup: async (email: string, password: string, first_name: string, last_name?: string) => {
     const response = await fetch(`${API_BASE_URL}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({
+        email,
+        password,
+        first_name,
+        last_name,
+        name: `${first_name} ${last_name || ''}`.trim()
+      }),
     });
     const data = await response.json();
     if (!response.ok) {

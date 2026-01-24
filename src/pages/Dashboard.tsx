@@ -40,7 +40,10 @@ interface MCPServer {
   latency: string;
 }
 
+import { useUser } from '@/hooks/useSymoneData';
+
 const Dashboard = () => {
+  const { data: user } = useUser();
   const [activeTab, setActiveTab] = useState('overview');
 
   const servers: MCPServer[] = [
@@ -88,11 +91,10 @@ const Dashboard = () => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === item.id
-                  ? 'bg-sidebar-accent text-primary'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
-              }`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === item.id
+                ? 'bg-sidebar-accent text-primary'
+                : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                }`}
             >
               <item.icon className="w-5 h-5" />
               {item.label}
@@ -104,11 +106,15 @@ const Dashboard = () => {
         <div className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent/50 cursor-pointer transition-colors">
             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-              <span className="text-sm font-semibold text-primary">JD</span>
+              <span className="text-sm font-semibold text-primary">
+                {user?.avatar || (user?.firstName ? user.firstName[0] : 'U')}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">John Doe</p>
-              <p className="text-xs text-muted-foreground truncate">Team Plan</p>
+              <p className="text-sm font-medium text-foreground truncate">
+                {user ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Loading...'}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">{user?.plan || 'Team Plan'}</p>
             </div>
             <ChevronDown className="w-4 h-4 text-muted-foreground" />
           </div>
@@ -158,9 +164,8 @@ const Dashboard = () => {
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                     <stat.icon className="w-5 h-5 text-primary" />
                   </div>
-                  <div className={`flex items-center gap-1 text-xs font-medium ${
-                    stat.trend === 'up' ? 'text-success' : 'text-accent'
-                  }`}>
+                  <div className={`flex items-center gap-1 text-xs font-medium ${stat.trend === 'up' ? 'text-success' : 'text-accent'
+                    }`}>
                     <TrendingUp className={`w-3 h-3 ${stat.trend === 'down' ? 'rotate-180' : ''}`} />
                     {stat.change}
                   </div>

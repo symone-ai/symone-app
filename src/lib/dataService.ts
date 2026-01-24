@@ -50,8 +50,8 @@ export const userService = {
         // Map backend user format to frontend User type
         return {
           id: parsed.id || 'usr-1',
-          firstName: parsed.name ? parsed.name.split(' ')[0] : 'User',
-          lastName: parsed.name ? parsed.name.split(' ').slice(1).join(' ') || '' : '',
+          firstName: parsed.first_name || (parsed.name ? parsed.name.split(' ')[0] : 'User'),
+          lastName: parsed.last_name || (parsed.name ? parsed.name.split(' ').slice(1).join(' ') || '' : ''),
           email: parsed.email || 'user@example.com',
           avatar: parsed.avatar_url || parsed.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U',
           role: parsed.role || 'owner',
@@ -79,6 +79,8 @@ export const userService = {
         const parsed = JSON.parse(loggedInUser);
         localStorage.setItem('symone_user', JSON.stringify({
           ...parsed,
+          first_name: updates.firstName || user.firstName,
+          last_name: updates.lastName || user.lastName,
           name: `${updates.firstName || user.firstName} ${updates.lastName || user.lastName}`.trim(),
           email: updates.email || user.email,
         }));
