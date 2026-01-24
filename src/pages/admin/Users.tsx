@@ -116,7 +116,7 @@ export default function AdminUsers() {
     open: false,
     title: '',
     description: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     variant: 'default'
   });
 
@@ -361,9 +361,10 @@ export default function AdminUsers() {
 
   const filteredUsers = users.filter(user => {
     const searchLower = userSearchQuery.toLowerCase();
-    const nameMatch = user.name?.toLowerCase().includes(searchLower) || false;
+    const firstNameMatch = user.first_name?.toLowerCase().includes(searchLower) || false;
+    const lastNameMatch = user.last_name?.toLowerCase().includes(searchLower) || false;
     const emailMatch = user.email?.toLowerCase().includes(searchLower) || false;
-    return emailMatch || nameMatch;
+    return emailMatch || firstNameMatch || lastNameMatch;
   });
 
   if (loading && teams.length === 0 && users.length === 0) {
@@ -641,7 +642,9 @@ export default function AdminUsers() {
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="font-medium">{user.name || 'No name'}</p>
+                              <p className="font-medium">
+                                {user.first_name} {user.last_name}
+                              </p>
                               <p className="text-sm text-muted-foreground">{user.email}</p>
                             </div>
                           </div>
