@@ -50,6 +50,23 @@ const Settings = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
 
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState<Array<{
+    id: string;
+    name: string;
+    prefix: string;
+    created_at: string;
+    description?: string;
+  }>>([]);
+  const [loadingKeys, setLoadingKeys] = useState(false);
+  const [generatingKey, setGeneratingKey] = useState(false);
+  const [newlyGeneratedKey, setNewlyGeneratedKey] = useState<{
+    id: string;
+    name: string;
+    key: string;
+    created_at: string;
+  } | null>(null);
+
   // Populate form when user data loads
   useEffect(() => {
     if (user) {
@@ -58,6 +75,58 @@ const Settings = () => {
       setEmail(user.email || '');
     }
   }, [user]);
+
+  // Load API keys when section is active
+  useEffect(() => {
+    if (activeSection === 'api') {
+      loadApiKeys();
+    }
+  }, [activeSection]);
+
+  const loadApiKeys = async () => {
+    setLoadingKeys(true);
+    try {
+      const keys = await api.user.getApiKeys();
+      setApiKeys(keys);
+    } catch (error) {
+      console.error('Failed to load API keys:', error);
+    } finally {
+      setLoadingKeys(false);
+    }
+  };
+
+  const handleGenerateApiKey = async () => {
+    const keyName = `Key ${apiKeys.length + 1}`;
+    setGeneratingKey(true);
+    try {
+      const newKey = await api.user.createApiKey(keyName);
+      setNewlyGeneratedKey(newKey);
+      await loadApiKeys();
+    } catch (error: any) {
+      console.error('Failed to generate API key:', error);
+      alert(error.message || 'Failed to generate API key');
+    } finally {
+      setGeneratingKey(false);
+    }
+  };
+
+  const handleDeleteApiKey = async (keyId: string) => {
+    if (!confirm('Are you sure you want to delete this API key? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await api.user.revokeApiKey(keyId);
+      await loadApiKeys();
+    } catch (error: any) {
+      console.error('Failed to delete API key:', error);
+      alert(error.message || 'Failed to delete API key');
+    }
+  };
+
+  const handleCopyKey = (key: string) => {
+    navigator.clipboard.writeText(key);
+    alert('API key copied to clipboard!');
+  };
 
   const handleSaveProfile = async () => {
     try {
@@ -567,20 +636,90 @@ const Settings = () => {
                   <CardDescription>Manage your API keys for programmatic access</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="p-4 rounded-lg bg-secondary/50 flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-foreground font-mono">nmcp_live_****xxxx</p>
-                      <p className="text-sm text-muted-foreground">Created Jan 15, 2024</p>
+                  {loadingKeys ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm">Regenerate</Button>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">Delete</Button>
-                    </div>
-                  </div>
-                  <Button variant="outline">
-                    <Code className="w-4 h-4 mr-2" />
-                    Generate New Key
-                  </Button>
+                  ) : (
+                    <>
+                      {newlyGeneratedKey && (
+                        <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/50">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <p className="font-medium text-green-600 dark:text-green-400 mb-1">New API Key Generated</p>
+                              <p className="text-sm text-muted-foreground mb-3">
+                                Copy this key now - you won't be able to see it again!
+                              </p>
+                              <p className="font-mono text-sm bg-background p-2 rounded break-all">
+                                {newlyGeneratedKey.key}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleCopyKey(newlyGeneratedKey.key)}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setNewlyGeneratedKey(null)}
+                            className="mt-2"
+                          >
+                            Done
+                          </Button>
+                        </div>
+                      )}
+
+                      {apiKeys.length > 0 ? (
+                        apiKeys.map((key) => (
+                          <div key={key.id} className="p-4 rounded-lg bg-secondary/50 flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-foreground font-mono">{key.prefix}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Created {new Date(key.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleDeleteApiKey(key.id)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Code className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                          <p>No API keys yet</p>
+                        </div>
+                      )}
+
+                      <Button
+                        variant="outline"
+                        onClick={handleGenerateApiKey}
+                        disabled={generatingKey}
+                      >
+                        {generatingKey ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Code className="w-4 h-4 mr-2" />
+                            Generate New Key
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Key,
@@ -15,68 +15,85 @@ import {
   CheckCircle2,
   Search,
   Server,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { api } from '@/lib/api';
 
 interface Secret {
   id: string;
-  name: string;
-  value: string;
-  servers: string[];
-  createdAt: string;
-  lastUsed: string;
-  expiresAt?: string;
-  status: 'active' | 'expiring' | 'expired';
+  key: string;
+  description?: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 const Secrets = () => {
-  const [showValues, setShowValues] = useState<Record<string, boolean>>({});
-  const [copied, setCopied] = useState<string | null>(null);
+  const [secrets, setSecrets] = useState<Secret[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newSecretKey, setNewSecretKey] = useState('');
+  const [newSecretValue, setNewSecretValue] = useState('');
 
-  // Secrets will be loaded from API once user has deployed servers and configured secrets
-  // For now, show empty state - users can add secrets after deploying servers
-  const [secrets] = useState<Secret[]>([]);
+  useEffect(() => {
+    loadSecrets();
+  }, []);
+
+  const loadSecrets = async () => {
+    setLoading(true);
+    try {
+      const data = await api.user.getSecrets();
+      setSecrets(data);
+    } catch (error) {
+      console.error('Failed to load secrets:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateSecret = async () => {
+    if (!newSecretKey.trim() || !newSecretValue.trim()) {
+      alert('Please provide both key and value');
+      return;
+    }
+    setCreating(true);
+    try {
+      await api.user.createSecret(newSecretKey, newSecretValue);
+      setShowCreateDialog(false);
+      setNewSecretKey('');
+      setNewSecretValue('');
+      await loadSecrets();
+    } catch (error: any) {
+      console.error('Failed to create secret:', error);
+      alert(error.message || 'Failed to create secret');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteSecret = async (secretId: string) => {
+    if (!confirm('Are you sure you want to delete this secret? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await api.user.deleteSecret(secretId);
+      await loadSecrets();
+    } catch (error: any) {
+      console.error('Failed to delete secret:', error);
+      alert(error.message || 'Failed to delete secret');
+    }
+  };
 
   const toggleShow = (id: string) => {
     setShowValues(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const copyToClipboard = (id: string, value: string) => {
-    navigator.clipboard.writeText(value);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
-  };
-
-  const maskValue = (value: string) => {
-    return '•'.repeat(Math.min(value.length, 32));
-  };
-
-  const getStatusBadge = (status: Secret['status']) => {
-    switch (status) {
-      case 'active':
-        return (
-          <span className="px-2 py-1 rounded-full bg-success/10 text-success text-xs font-medium flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" />
-            Active
-          </span>
-        );
-      case 'expiring':
-        return (
-          <span className="px-2 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3" />
-            Expiring Soon
-          </span>
-        );
-      case 'expired':
-        return (
-          <span className="px-2 py-1 rounded-full bg-destructive/10 text-destructive text-xs font-medium flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3" />
-            Expired
-          </span>
-        );
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -86,7 +103,7 @@ const Secrets = () => {
           <h1 className="text-2xl font-bold text-foreground">Secrets</h1>
           <p className="text-muted-foreground">Securely manage API keys and credentials</p>
         </div>
-        <Button variant="hero">
+        <Button variant="hero" onClick={() => setShowCreateDialog(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Secret
         </Button>
@@ -111,33 +128,34 @@ const Secrets = () => {
       </motion.div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Secrets', value: secrets.length, icon: Key, color: 'text-primary' },
-          { label: 'Active', value: secrets.filter(s => s.status === 'active').length, icon: CheckCircle2, color: 'text-success' },
-          { label: 'Expiring Soon', value: secrets.filter(s => s.status === 'expiring').length, icon: AlertTriangle, color: 'text-accent' },
-          { label: 'Expired', value: secrets.filter(s => s.status === 'expired').length, icon: AlertTriangle, color: 'text-destructive' },
-        ].map((stat, i) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-          >
-            <Card>
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-lg bg-secondary flex items-center justify-center ${stat.color}`}>
-                  <stat.icon className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { label: 'Total Secrets', value: secrets.length, icon: Key, color: 'text-primary' },
+            { label: 'Encrypted', value: secrets.length, icon: Shield, color: 'text-success' },
+            { label: 'Last Updated', value: secrets.length > 0 ? 'Today' : 'Never', icon: Calendar, color: 'text-accent' },
+          ].map((stat, i) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+            >
+              <Card>
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-lg bg-secondary flex items-center justify-center ${stat.color}`}>
+                    <stat.icon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{typeof stat.value === 'number' ? stat.value : stat.value}</p>
+                    <p className="text-sm text-muted-foreground">{stat.label}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -151,14 +169,18 @@ const Secrets = () => {
 
       {/* Secrets List */}
       <div className="space-y-3">
-        {secrets.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : secrets.length === 0 ? (
           <div className="text-center py-12">
             <Key className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-lg font-medium text-foreground mb-2">No secrets configured</p>
             <p className="text-muted-foreground mb-4">
-              Deploy a server first, then add API keys and credentials here
+              Securely store API keys and credentials for your MCP servers
             </p>
-            <Button variant="hero">
+            <Button variant="hero" onClick={() => setShowCreateDialog(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add First Secret
             </Button>
@@ -182,66 +204,37 @@ const Secrets = () => {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-1">
-                        <h3 className="font-mono font-semibold text-foreground">{secret.name}</h3>
-                        {getStatusBadge(secret.status)}
+                        <h3 className="font-mono font-semibold text-foreground">{secret.key}</h3>
                       </div>
 
-                      {/* Value */}
+                      {/* Value - secrets are always masked since we don't store plain text */}
                       <div className="flex items-center gap-2 mb-2">
-                        <code className="text-sm text-muted-foreground font-mono bg-secondary px-2 py-1 rounded max-w-md truncate">
-                          {showValues[secret.id] ? secret.value : maskValue(secret.value)}
+                        <code className="text-sm text-muted-foreground font-mono bg-secondary px-2 py-1 rounded">
+                          ••••••••••••••••
                         </code>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => toggleShow(secret.id)}
-                        >
-                          {showValues[secret.id] ? (
-                            <EyeOff className="w-3 h-3" />
-                          ) : (
-                            <Eye className="w-3 h-3" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => copyToClipboard(secret.id, secret.value)}
-                        >
-                          {copied === secret.id ? (
-                            <CheckCircle2 className="w-3 h-3 text-success" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </Button>
+                        <span className="text-xs text-muted-foreground">(encrypted)</span>
                       </div>
 
                       {/* Meta */}
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
-                          <Server className="w-3 h-3" />
-                          {secret.servers.join(', ')}
-                        </span>
-                        <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          Created {secret.createdAt}
+                          Created {new Date(secret.created_at).toLocaleDateString()}
                         </span>
-                        <span>Last used {secret.lastUsed}</span>
-                        {secret.expiresAt && (
-                          <span className={secret.status === 'expired' ? 'text-destructive' : secret.status === 'expiring' ? 'text-accent' : ''}>
-                            Expires {secret.expiresAt}
-                          </span>
+                        {secret.description && (
+                          <span>{secret.description}</span>
                         )}
                       </div>
                     </div>
 
                     {/* Actions */}
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <RefreshCw className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteSecret(secret.id)}
+                      >
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
@@ -252,6 +245,54 @@ const Secrets = () => {
           ))
         )}
       </div>
+
+      {/* Create Secret Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Secret</DialogTitle>
+            <DialogDescription>
+              Store an encrypted API key or credential for your MCP servers
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="secret-key">Secret Key</Label>
+              <Input
+                id="secret-key"
+                placeholder="e.g., SLACK_BOT_TOKEN"
+                value={newSecretKey}
+                onChange={(e) => setNewSecretKey(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="secret-value">Secret Value</Label>
+              <Input
+                id="secret-value"
+                type="password"
+                placeholder="Enter the secret value"
+                value={newSecretValue}
+                onChange={(e) => setNewSecretValue(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateSecret} disabled={creating}>
+              {creating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Secret'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
