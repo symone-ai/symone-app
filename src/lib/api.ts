@@ -1065,6 +1065,71 @@ export const user = {
   isAuthenticated: () => {
     return !!userStorage.getToken();
   },
+
+  // API Keys Management
+  getApiKeys: async () => {
+    const response = await userRequest<{
+      success: boolean;
+      api_keys: Array<{
+        id: string;
+        name: string;
+        prefix: string;
+        created_at: string;
+        description?: string;
+      }>;
+    }>('/auth/api-keys');
+    return response.api_keys || [];
+  },
+
+  createApiKey: async (name: string) => {
+    const response = await userRequest<{
+      success: boolean;
+      api_key: {
+        id: string;
+        name: string;
+        key: string;
+        created_at: string;
+      };
+    }>('/auth/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+    return response.api_key;
+  },
+
+  revokeApiKey: async (keyId: string) => {
+    await userRequest(`/auth/api-keys/${keyId}`, { method: 'DELETE' });
+  },
+
+  // Secrets Management
+  getSecrets: async () => {
+    const response = await userRequest<{
+      success: boolean;
+      secrets: Array<{
+        id: string;
+        key: string;
+        description?: string;
+        created_at: string;
+        updated_at?: string;
+      }>;
+    }>('/auth/secrets');
+    return response.secrets || [];
+  },
+
+  createSecret: async (key: string, value: string) => {
+    const response = await userRequest<{
+      success: boolean;
+      message: string;
+    }>('/auth/secrets', {
+      method: 'POST',
+      body: JSON.stringify({ key, value }),
+    });
+    return response;
+  },
+
+  deleteSecret: async (secretId: string) => {
+    await userRequest(`/auth/secrets/${secretId}`, { method: 'DELETE' });
+  },
 };
 
 // ============================================================================
