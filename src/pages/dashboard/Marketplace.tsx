@@ -732,19 +732,9 @@ const ServerCard = ({
               by {server.publisher}
             </span>
             <div className="flex items-center gap-2">
-              <Link to={`/servers/${server.slug}`}>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <ExternalLink className="w-3 h-3 mr-1" />
-                  View
-                </Button>
-              </Link>
               <Button size="sm" variant="hero">
                 <Zap className="w-3 h-3 mr-1" />
-                Deploy
+                Install
               </Button>
             </div>
           </div>
