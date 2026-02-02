@@ -85,7 +85,7 @@ interface MarketplaceServer {
   executionMode: ExecutionMode;
   verified: boolean;
   healthScore: number;
-  installs: number;
+  install_count: number;
   rating: number;
   latency: string;
   coldStart: string;
@@ -144,7 +144,7 @@ const Marketplace = () => {
             executionMode: 'dual-mode', // Placeholder
             verified: m.verified,
             healthScore: 98, // Placeholder
-            installs: m.installs || 0,
+            install_count: m.install_count || 0,
             rating: 0, // Not in DB yet?
             latency: '120ms', // Placeholder
             coldStart: '200ms', // Placeholder
@@ -207,7 +207,7 @@ const Marketplace = () => {
     // Sort
     switch (sortBy) {
       case 'popular':
-        filtered.sort((a, b) => b.installs - a.installs);
+        filtered.sort((a, b) => b.install_count - a.install_count);
         break;
       case 'rating':
         filtered.sort((a, b) => b.rating - a.rating);
@@ -704,7 +704,7 @@ const ServerCard = ({
             </span>
             <span className="flex items-center gap-1">
               <Download className="w-3 h-3" />
-              {(server.installs / 1000).toFixed(1)}k
+              {(server.install_count / 1000).toFixed(1)}k
             </span>
             <span className="flex items-center gap-1" title="Response latency when warm">
               <Clock className="w-3 h-3" />
