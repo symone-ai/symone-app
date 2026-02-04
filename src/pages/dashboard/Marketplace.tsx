@@ -66,8 +66,9 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Checkbox } from '@/components/ui/checkbox';
-import { api } from '@/lib/api';
+import { api, MarketplaceMCP } from '@/lib/api';
 import { CATEGORIES } from '@/lib/categories';
+import { InstallWizard } from '@/components/dashboard/InstallWizard';
 
 type ServerType = 'official' | 'partner' | 'community';
 type ExecutionMode = 'traditional' | 'code-execution' | 'dual-mode';
@@ -76,6 +77,7 @@ interface MarketplaceServer {
   id: string;
   name: string;
   slug: string;
+  server_type?: string;
   description: string;
   category: string;
   subcategory: string;
@@ -85,13 +87,18 @@ interface MarketplaceServer {
   executionMode: ExecutionMode;
   verified: boolean;
   healthScore: number;
-  installs: number;
+  install_count: number;
   rating: number;
   latency: string;
   coldStart: string;
   toolCount: number;
   tags: string[];
   featured?: boolean;
+  // New fields for enhanced marketplace
+  external_url?: string;
+  documentation_url?: string;
+  logo_url?: string;
+  required_secrets?: string[];
 }
 
 // Map the shared categories to the UI structure (adding 'count' which we'd need to fetch dynamically ideally)
@@ -116,6 +123,39 @@ const Marketplace = () => {
   const [mcps, setMcps] = useState<MarketplaceServer[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Install Wizard State
+  const [selectedMcp, setSelectedMcp] = useState<MarketplaceMCP | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  const handleInstallClick = (server: MarketplaceServer) => {
+    // Convert MarketplaceServer to MarketplaceMCP format for wizard
+    setSelectedMcp({
+      id: server.id,
+      name: server.name,
+      slug: server.slug,
+      server_type: server.server_type || server.slug,
+      category: server.category,
+      subcategory: server.subcategory,
+      description: server.description,
+      provider: server.serverType,
+      status: 'active',
+      version: '1.0.0',
+      icon: '📦',
+      install_count: server.install_count,
+      rating: server.rating,
+      is_featured: server.featured || false,
+      verified: server.verified,
+      is_hosted_by_symone: true,
+      external_url: server.external_url,
+      documentation_url: server.documentation_url,
+      logo_url: server.logo_url,
+      required_secrets: server.required_secrets,
+      tools_count: server.toolCount,
+      created_at: new Date().toISOString(),
+    });
+    setWizardOpen(true);
+  };
+
   useEffect(() => {
     const fetchMCPs = async () => {
       setLoading(true);
@@ -135,6 +175,7 @@ const Marketplace = () => {
             id: m.id,
             name: m.name,
             slug: m.slug,
+            server_type: m.server_type || m.slug,
             description: m.description || '',
             category: m.category,
             subcategory: m.subcategory || '',
@@ -144,13 +185,18 @@ const Marketplace = () => {
             executionMode: 'dual-mode', // Placeholder
             verified: m.verified,
             healthScore: 98, // Placeholder
-            installs: m.installs || 0,
+            install_count: m.install_count || 0,
             rating: 0, // Not in DB yet?
             latency: '120ms', // Placeholder
             coldStart: '200ms', // Placeholder
-            toolCount: 0,
+            toolCount: m.tools_count || 0,
             tags: [],
-            featured: m.is_featured
+            featured: m.is_featured,
+            // New fields from enhanced marketplace
+            external_url: m.external_url,
+            documentation_url: m.documentation_url,
+            logo_url: m.logo_url,
+            required_secrets: m.required_secrets || [],
           }));
           setMcps(mapped);
         }
@@ -207,7 +253,7 @@ const Marketplace = () => {
     // Sort
     switch (sortBy) {
       case 'popular':
-        filtered.sort((a, b) => b.installs - a.installs);
+        filtered.sort((a, b) => b.install_count - a.install_count);
         break;
       case 'rating':
         filtered.sort((a, b) => b.rating - a.rating);
@@ -593,7 +639,7 @@ const Marketplace = () => {
                 </div>
                 <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {featuredServers.slice(0, 6).map((server, index) => (
-                    <ServerCard key={server.id} server={server} index={index} getHealthColor={getHealthColor} getServerTypeBadge={getServerTypeBadge} />
+                    <ServerCard key={server.id} server={server} index={index} getHealthColor={getHealthColor} getServerTypeBadge={getServerTypeBadge} onInstall={handleInstallClick} />
                   ))}
                 </div>
               </div>
@@ -620,7 +666,7 @@ const Marketplace = () => {
                 {filteredServers.length > 0 ? (
                   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 pb-6">
                     {filteredServers.map((server, index) => (
-                      <ServerCard key={server.id} server={server} index={index} getHealthColor={getHealthColor} getServerTypeBadge={getServerTypeBadge} />
+                      <ServerCard key={server.id} server={server} index={index} getHealthColor={getHealthColor} getServerTypeBadge={getServerTypeBadge} onInstall={handleInstallClick} />
                     ))}
                   </div>
                 ) : (
@@ -640,6 +686,16 @@ const Marketplace = () => {
           </div>
         </ScrollArea>
       </div>
+
+      {/* Install Wizard Modal */}
+      <InstallWizard
+        mcp={selectedMcp}
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onSuccess={() => {
+          // Could refresh servers list here
+        }}
+      />
     </div>
   );
 };
@@ -650,11 +706,13 @@ const ServerCard = ({
   index,
   getHealthColor,
   getServerTypeBadge,
+  onInstall,
 }: {
   server: MarketplaceServer;
   index: number;
   getHealthColor: (score: number) => string;
   getServerTypeBadge: (type: ServerType) => { label: string; className: string };
+  onInstall: (server: MarketplaceServer) => void;
 }) => {
   const typeBadge = getServerTypeBadge(server.serverType);
 
@@ -704,7 +762,7 @@ const ServerCard = ({
             </span>
             <span className="flex items-center gap-1">
               <Download className="w-3 h-3" />
-              {(server.installs / 1000).toFixed(1)}k
+              {(server.install_count / 1000).toFixed(1)}k
             </span>
             <span className="flex items-center gap-1" title="Response latency when warm">
               <Clock className="w-3 h-3" />
@@ -716,6 +774,7 @@ const ServerCard = ({
             </span>
           </div>
 
+          {/* Tags and External Links */}
           <div className="flex flex-wrap gap-1 mb-4">
             {server.tags.slice(0, 3).map((tag) => (
               <span
@@ -725,6 +784,29 @@ const ServerCard = ({
                 {tag}
               </span>
             ))}
+            {/* External Links */}
+            {server.external_url && (
+              <a
+                href={server.external_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-0.5 rounded-full bg-primary/10 text-xs text-primary hover:bg-primary/20 flex items-center gap-1"
+              >
+                <Globe className="w-3 h-3" />
+                Website
+              </a>
+            )}
+            {server.documentation_url && (
+              <a
+                href={server.documentation_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-0.5 rounded-full bg-accent/10 text-xs text-accent hover:bg-accent/20 flex items-center gap-1"
+              >
+                <FileText className="w-3 h-3" />
+                Docs
+              </a>
+            )}
           </div>
 
           <div className="flex items-center justify-between pt-3 border-t border-border">
@@ -732,19 +814,9 @@ const ServerCard = ({
               by {server.publisher}
             </span>
             <div className="flex items-center gap-2">
-              <Link to={`/servers/${server.slug}`}>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <ExternalLink className="w-3 h-3 mr-1" />
-                  View
-                </Button>
-              </Link>
-              <Button size="sm" variant="hero">
+              <Button size="sm" variant="hero" onClick={() => onInstall(server)}>
                 <Zap className="w-3 h-3 mr-1" />
-                Deploy
+                Install
               </Button>
             </div>
           </div>

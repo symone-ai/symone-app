@@ -1,31 +1,50 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  Zap, 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
+import {
+  Zap,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
   ArrowRight,
   Github,
   Chrome,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { user, userStorage } from '@/lib/api';
 
 const SignIn = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     remember: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle signin - would integrate with auth
-    console.log('Sign in:', formData);
+    setError(null);
+    setLoading(true);
+
+    try {
+      const response = await user.login(formData.email, formData.password);
+
+      // Store token and user data
+      userStorage.setToken(response.token);
+      localStorage.setItem('symone_user', JSON.stringify(response.user));
+
+      // Redirect to dashboard
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign in');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -138,9 +157,15 @@ const SignIn = () => {
                 </label>
               </div>
 
-              <Button type="submit" variant="hero" className="w-full">
-                Sign In
-                <ArrowRight className="ml-2 w-4 h-4" />
+              {error && (
+                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" variant="hero" className="w-full" disabled={loading}>
+                {loading ? 'Signing In...' : 'Sign In'}
+                {!loading && <ArrowRight className="ml-2 w-4 h-4" />}
               </Button>
             </form>
 

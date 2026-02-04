@@ -628,6 +628,7 @@ export interface MarketplaceMCP {
   id: string;
   name: string;
   slug: string;
+  server_type?: string;
   category: string;
   subcategory?: string;
   description?: string;
@@ -635,11 +636,17 @@ export interface MarketplaceMCP {
   status: 'planned' | 'active' | 'pending' | 'rejected' | 'deprecated';
   version: string;
   icon: string;
-  installs: number;
+  install_count: number;
   rating: number;
   is_featured: boolean;
   verified: boolean;
   is_hosted_by_symone: boolean;
+  // New fields for enhanced marketplace
+  external_url?: string;
+  documentation_url?: string;
+  logo_url?: string;
+  required_secrets?: string[];
+  tools_count?: number;
   created_at: string;
   updated_at?: string;
 }
@@ -844,6 +851,14 @@ export interface UserActivityLog {
   request_params?: Record<string, any>;
 }
 
+export interface UserRequestTrace {
+  id: string;
+  activity_log_id: string;
+  request_payload?: Record<string, any>;
+  response_payload?: Record<string, any>;
+  created_at: string;
+}
+
 export const user = {
   // Servers - uses session token auth
   getServers: async () => {
@@ -914,6 +929,16 @@ export const user = {
       `/auth/dashboard/activity${query.toString() ? '?' + query : ''}`
     );
     return { activities: response.activity || [], total: response.activity?.length || 0 };
+  },
+
+  // Get activity trace (request/response payloads)
+  getActivityTrace: async (activityId: string) => {
+    const response = await userRequest<{
+      success: boolean;
+      activity: UserActivityLog;
+      trace: UserRequestTrace | null;
+    }>(`/auth/dashboard/activity/${activityId}/trace`);
+    return response;
   },
 
   // Metrics / Health - uses session token auth
@@ -1074,31 +1099,53 @@ export const user = {
         id: string;
         name: string;
         prefix: string;
-        created_at: string;
         description?: string;
+        created_at: string;
+        last_used_at?: string;
       }>;
-    }>('/auth/api-keys');
+    }>('/auth/dashboard/api-keys');
     return response.api_keys || [];
   },
 
-  createApiKey: async (name: string) => {
+  createApiKey: async (name: string, description?: string) => {
     const response = await userRequest<{
       success: boolean;
       api_key: {
         id: string;
         name: string;
         key: string;
+        prefix: string;
+        description?: string;
         created_at: string;
       };
-    }>('/auth/api-keys', {
+      message: string;
+    }>('/auth/dashboard/api-keys', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, description }),
     });
     return response.api_key;
   },
 
   revokeApiKey: async (keyId: string) => {
-    await userRequest(`/auth/api-keys/${keyId}`, { method: 'DELETE' });
+    await userRequest(`/auth/dashboard/api-keys/${keyId}`, { method: 'DELETE' });
+  },
+
+  rotateApiKey: async (keyId: string) => {
+    const response = await userRequest<{
+      success: boolean;
+      api_key: {
+        id: string;
+        name: string;
+        key: string;
+        prefix: string;
+        description?: string;
+        created_at: string;
+      };
+      message: string;
+    }>(`/auth/dashboard/api-keys/${keyId}/rotate`, {
+      method: 'POST',
+    });
+    return response.api_key;
   },
 
   // Secrets Management
@@ -1130,7 +1177,225 @@ export const user = {
   deleteSecret: async (secretId: string) => {
     await userRequest(`/auth/secrets/${secretId}`, { method: 'DELETE' });
   },
+
+  // Webhooks Management
+  getWebhooks: async () => {
+    return await userRequest<{
+      success: boolean;
+      webhooks: Array<{
+        id: string;
+        name: string;
+        type: string;
+        endpoint_url: string;
+        events: string[];
+        is_active: boolean;
+        created_at: string;
+        last_triggered_at?: string;
+        failure_count: number;
+      }>;
+    }>('/auth/dashboard/webhooks');
+  },
+
+  createWebhook: async (data: { name: string; endpoint_url: string; events: string[] }) => {
+    return await userRequest<{
+      success: boolean;
+      webhook: {
+        id: string;
+        name: string;
+        endpoint_url: string;
+        events: string[];
+      };
+    }>('/auth/dashboard/webhooks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateWebhook: async (webhookId: string, data: { name?: string; endpoint_url?: string; events?: string[]; is_active?: boolean }) => {
+    return await userRequest<{
+      success: boolean;
+      webhook: {
+        id: string;
+        name: string;
+        endpoint_url: string;
+        events: string[];
+        is_active: boolean;
+      };
+    }>(`/auth/dashboard/webhooks/${webhookId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteWebhook: async (webhookId: string) => {
+    await userRequest(`/auth/dashboard/webhooks/${webhookId}`, { method: 'DELETE' });
+  },
+
+  testWebhook: async (webhookId: string) => {
+    return await userRequest<{
+      success: boolean;
+      status?: string;
+      response_code?: number;
+      error?: string;
+    }>(`/auth/dashboard/webhooks/${webhookId}/test`, {
+      method: 'POST',
+    });
+  },
+
+  // Export Configuration
+  exportConfig: async () => {
+    return await userRequest<{
+      success: boolean;
+      export: {
+        team: {
+          id: string;
+          name: string;
+          plan: string;
+        };
+        servers: Array<{
+          name: string;
+          type: string;
+          status: string;
+        }>;
+        secrets: Array<{
+          key: string;
+          masked_value: string;
+        }>;
+        webhooks: Array<{
+          name: string;
+          endpoint_url: string;
+          events: string[];
+        }>;
+        exported_at: string;
+      };
+    }>('/auth/dashboard/export');
+  },
+
+  // Scheduled Jobs Management
+  getScheduledJobs: async () => {
+    return await userRequest<{
+      success: boolean;
+      jobs: ScheduledJob[];
+      total: number;
+    }>('/auth/dashboard/scheduled-jobs');
+  },
+
+  getScheduledJobStats: async () => {
+    return await userRequest<{
+      success: boolean;
+      stats: {
+        total_jobs: number;
+        active_jobs: number;
+        paused_jobs: number;
+        total_runs: number;
+        total_errors: number;
+        success_rate: number;
+      };
+    }>('/auth/dashboard/scheduled-jobs/stats');
+  },
+
+  createScheduledJob: async (data: {
+    name: string;
+    server_id: string;
+    tool_name: string;
+    parameters?: Record<string, any>;
+    cron_expression: string;
+    timezone?: string;
+  }) => {
+    return await userRequest<{
+      success: boolean;
+      job: ScheduledJob;
+      message: string;
+    }>('/auth/dashboard/scheduled-jobs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getScheduledJob: async (jobId: string) => {
+    return await userRequest<{
+      success: boolean;
+      job: ScheduledJob;
+    }>(`/auth/dashboard/scheduled-jobs/${jobId}`);
+  },
+
+  updateScheduledJob: async (jobId: string, data: {
+    name?: string;
+    parameters?: Record<string, any>;
+    cron_expression?: string;
+    timezone?: string;
+    is_active?: boolean;
+  }) => {
+    return await userRequest<{
+      success: boolean;
+      job: ScheduledJob;
+    }>(`/auth/dashboard/scheduled-jobs/${jobId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteScheduledJob: async (jobId: string) => {
+    await userRequest(`/auth/dashboard/scheduled-jobs/${jobId}`, { method: 'DELETE' });
+  },
+
+  toggleScheduledJob: async (jobId: string) => {
+    return await userRequest<{
+      success: boolean;
+      is_active: boolean;
+      message: string;
+    }>(`/auth/dashboard/scheduled-jobs/${jobId}/toggle`, {
+      method: 'POST',
+    });
+  },
+
+  runScheduledJobNow: async (jobId: string) => {
+    return await userRequest<{
+      success: boolean;
+      status: string;
+      result: any;
+      duration_ms: number;
+      error?: string;
+    }>(`/auth/dashboard/scheduled-jobs/${jobId}/run-now`, {
+      method: 'POST',
+    });
+  },
+
+  getScheduledJobHistory: async (jobId: string, limit: number = 20) => {
+    return await userRequest<{
+      success: boolean;
+      executions: JobExecution[];
+      total: number;
+    }>(`/auth/dashboard/scheduled-jobs/${jobId}/history?limit=${limit}`);
+  },
 };
+
+// Scheduled Job Types
+export interface ScheduledJob {
+  id: string;
+  name: string;
+  server_id: string;
+  tool_name: string;
+  parameters: Record<string, any>;
+  cron_expression: string;
+  timezone: string;
+  is_active: boolean;
+  last_run_at?: string;
+  last_run_status?: 'success' | 'error' | 'pending';
+  next_run_at?: string;
+  run_count: number;
+  error_count: number;
+  created_at: string;
+}
+
+export interface JobExecution {
+  id: string;
+  started_at: string;
+  completed_at?: string;
+  status: 'pending' | 'running' | 'success' | 'error';
+  duration_ms?: number;
+  error_message?: string;
+}
 
 // ============================================================================
 // Export all

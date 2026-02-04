@@ -17,6 +17,7 @@ import {
   LogOut,
   CreditCard,
   HelpCircle,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +42,7 @@ const sidebarItems = [
   { id: 'overview', label: 'Overview', icon: BarChart3, path: '/dashboard' },
   { id: 'servers', label: 'Servers', icon: Server, path: '/dashboard/servers' },
   { id: 'marketplace', label: 'Marketplace', icon: Store, path: '/dashboard/marketplace' },
+  { id: 'scheduled-jobs', label: 'Scheduled Jobs', icon: Clock, path: '/dashboard/scheduled-jobs' },
   { id: 'activity', label: 'Activity', icon: Activity, path: '/dashboard/activity' },
   { id: 'replay', label: 'Session Replay', icon: Eye, path: '/dashboard/replay' },
   { id: 'secrets', label: 'Secrets', icon: Key, path: '/dashboard/secrets' },

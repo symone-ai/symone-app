@@ -21,6 +21,7 @@ import Settings from "./pages/dashboard/Settings";
 import Replay from "./pages/dashboard/Replay";
 import Marketplace from "./pages/dashboard/Marketplace";
 import DeployServer from "./pages/dashboard/DeployServer";
+import ScheduledJobs from "./pages/dashboard/ScheduledJobs";
 import NotFound from "./pages/NotFound";
 import UserProtectedRoute from "./components/UserProtectedRoute";
 
@@ -54,6 +55,7 @@ const AppApp = () => (
                         <Route path="/dashboard/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
                         <Route path="/dashboard/replay" element={<DashboardLayout><Replay /></DashboardLayout>} />
                         <Route path="/dashboard/marketplace" element={<DashboardLayout><Marketplace /></DashboardLayout>} />
+                        <Route path="/dashboard/scheduled-jobs" element={<DashboardLayout><ScheduledJobs /></DashboardLayout>} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />
