@@ -37,6 +37,16 @@ import MaintenanceOverlay from "./components/MaintenanceOverlay";
 
 const queryClient = new QueryClient();
 
+// Global fetch interceptor to catch 503 maintenance mode responses
+const originalFetch = window.fetch;
+window.fetch = async function (...args) {
+    const response = await originalFetch.apply(this, args);
+    if (response.status === 503) {
+        window.dispatchEvent(new CustomEvent('maintenance_mode_active'));
+    }
+    return response;
+};
+
 const AppApp = () => (
     <QueryClientProvider client={queryClient}>
         <TooltipProvider>
