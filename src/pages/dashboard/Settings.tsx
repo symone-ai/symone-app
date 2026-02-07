@@ -6,7 +6,6 @@ import {
   Bell,
   Shield,
   CreditCard,
-  Globe,
   Code,
   Zap,
   Moon,
@@ -26,6 +25,10 @@ import {
   XCircle,
   RefreshCw,
   Key,
+  Monitor,
+  Smartphone,
+  Laptop,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -69,14 +72,14 @@ const Settings = () => {
   const updateUser = useUpdateUser();
 
   const [activeSection, setActiveSection] = useState('general');
-  const [darkMode, setDarkMode] = useState(true);
-  const [notifications, setNotifications] = useState({
-    email: true,
-    push: true,
-    slack: false,
-    errors: true,
-    deploys: true,
-    usage: false,
+  const [darkMode, setDarkMode] = useState(() => {
+    const stored = localStorage.getItem('symone_dark_mode');
+    return stored !== null ? JSON.parse(stored) : true;
+  });
+  const [notifications, setNotifications] = useState(() => {
+    const stored = localStorage.getItem('symone_notification_prefs');
+    if (stored) return JSON.parse(stored);
+    return { email: true, push: true, slack: false, errors: true, deploys: true, usage: false };
   });
 
   // Profile form state
@@ -126,6 +129,19 @@ const Settings = () => {
     events: ['tool_failure'],
   });
 
+  // Sessions state
+  const [sessions, setSessions] = useState<Array<{
+    id: string;
+    device_info: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    created_at: string;
+    last_active_at: string;
+    is_current: boolean;
+  }>>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [revokingAll, setRevokingAll] = useState(false);
+
   // Export state
   const [exporting, setExporting] = useState(false);
 
@@ -144,6 +160,9 @@ const Settings = () => {
       loadApiKeys();
       loadWebhooks();
     }
+    if (activeSection === 'security') {
+      loadSessions();
+    }
   }, [activeSection]);
 
   const loadApiKeys = async () => {
@@ -156,6 +175,47 @@ const Settings = () => {
     } finally {
       setLoadingKeys(false);
     }
+  };
+
+  const loadSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const data = await api.user.listSessions();
+      setSessions(data);
+    } catch (error) {
+      console.error('Failed to load sessions:', error);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    try {
+      await api.user.revokeSession(sessionId);
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      toast({ title: 'Session revoked' });
+    } catch (error: any) {
+      toast({ title: 'Failed to revoke session', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleRevokeAllOther = async () => {
+    setRevokingAll(true);
+    try {
+      const result = await api.user.revokeOtherSessions();
+      toast({ title: `Revoked ${result.revoked_count} session(s)` });
+      await loadSessions();
+    } catch (error: any) {
+      toast({ title: 'Failed to revoke sessions', description: error.message, variant: 'destructive' });
+    } finally {
+      setRevokingAll(false);
+    }
+  };
+
+  const getDeviceIcon = (device: string) => {
+    if (device === 'Mobile') return Smartphone;
+    if (device === 'macOS' || device === 'Windows' || device === 'Linux') return Laptop;
+    return Monitor;
   };
 
   const handleGenerateApiKey = async () => {
@@ -414,30 +474,12 @@ const Settings = () => {
                         <p className="text-sm text-muted-foreground">Use dark theme for the interface</p>
                       </div>
                     </div>
-                    <Toggle enabled={darkMode} onChange={() => setDarkMode(!darkMode)} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Default Region</CardTitle>
-                  <CardDescription>Default deployment region for new servers</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {['us-east-1', 'us-west-2', 'eu-west-1', 'ap-south-1'].map((region) => (
-                      <button
-                        key={region}
-                        className={`p-3 rounded-lg border text-sm font-medium transition-colors ${region === 'us-east-1'
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border bg-secondary text-muted-foreground hover:border-primary/50'
-                          }`}
-                      >
-                        <Globe className="w-4 h-4 mx-auto mb-1" />
-                        {region}
-                      </button>
-                    ))}
+                    <Toggle enabled={darkMode} onChange={() => {
+                      const next = !darkMode;
+                      setDarkMode(next);
+                      localStorage.setItem('symone_dark_mode', JSON.stringify(next));
+                      document.documentElement.classList.toggle('dark', next);
+                    }} />
                   </div>
                 </CardContent>
               </Card>
@@ -453,7 +495,16 @@ const Settings = () => {
                       <p className="font-medium text-foreground">Delete Workspace</p>
                       <p className="text-sm text-muted-foreground">Permanently delete this workspace and all data</p>
                     </div>
-                    <Button variant="destructive" size="sm">Delete</Button>
+                    <Button variant="destructive" size="sm" onClick={async () => {
+                      if (!confirm('Are you sure you want to delete this workspace? This action cannot be undone.')) return;
+                      try {
+                        await api.user.deleteWorkspace();
+                        toast({ title: 'Workspace deleted' });
+                        window.location.href = '/dashboard';
+                      } catch (error: any) {
+                        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                      }
+                    }}>Delete</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -482,7 +533,6 @@ const Settings = () => {
                         <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
                           <span className="text-2xl font-semibold text-primary">{avatarInitials}</span>
                         </div>
-                        <Button variant="outline" size="sm">Change Avatar</Button>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
@@ -561,7 +611,11 @@ const Settings = () => {
                       </div>
                       <Toggle
                         enabled={notifications[item.key as keyof typeof notifications]}
-                        onChange={() => setNotifications(prev => ({ ...prev, [item.key]: !prev[item.key as keyof typeof notifications] }))}
+                        onChange={() => {
+                        const updated = { ...notifications, [item.key]: !notifications[item.key as keyof typeof notifications] };
+                        setNotifications(updated);
+                        localStorage.setItem('symone_notification_prefs', JSON.stringify(updated));
+                      }}
                       />
                     </div>
                   ))}
@@ -586,7 +640,11 @@ const Settings = () => {
                       </div>
                       <Toggle
                         enabled={notifications[item.key as keyof typeof notifications]}
-                        onChange={() => setNotifications(prev => ({ ...prev, [item.key]: !prev[item.key as keyof typeof notifications] }))}
+                        onChange={() => {
+                        const updated = { ...notifications, [item.key]: !notifications[item.key as keyof typeof notifications] };
+                        setNotifications(updated);
+                        localStorage.setItem('symone_notification_prefs', JSON.stringify(updated));
+                      }}
                       />
                     </div>
                   ))}
@@ -607,15 +665,15 @@ const Settings = () => {
                   <CardDescription>Add an extra layer of security</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-success/5 border border-success/20">
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border">
                     <div className="flex items-center gap-3">
-                      <Shield className="w-8 h-8 text-success" />
+                      <Shield className="w-8 h-8 text-muted-foreground" />
                       <div>
-                        <p className="font-medium text-foreground">2FA Enabled</p>
-                        <p className="text-sm text-muted-foreground">Your account is protected with 2FA</p>
+                        <p className="font-medium text-foreground">Two-Factor Authentication</p>
+                        <p className="text-sm text-muted-foreground">TOTP-based 2FA coming soon</p>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm">Manage</Button>
+                    <Badge variant="outline">Coming Soon</Badge>
                   </div>
                 </CardContent>
               </Card>
@@ -682,114 +740,189 @@ const Settings = () => {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Active Sessions</CardTitle>
-                  <CardDescription>Manage your active sessions</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Active Sessions</CardTitle>
+                      <CardDescription>Manage your active sessions across devices</CardDescription>
+                    </div>
+                    {sessions.filter(s => !s.is_current).length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRevokeAllOther}
+                        disabled={revokingAll}
+                      >
+                        {revokingAll ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <LogOut className="w-4 h-4 mr-2" />
+                        )}
+                        Sign out all others
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {[
-                    { device: 'Chrome on MacOS', location: 'San Francisco, US', current: true },
-                    { device: 'Safari on iPhone', location: 'San Francisco, US', current: false },
-                    { device: 'Firefox on Windows', location: 'New York, US', current: false },
-                  ].map((session, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-foreground">{session.device}</p>
-                          {session.current && (
-                            <span className="px-2 py-0.5 rounded-full bg-success/10 text-success text-xs">
-                              Current
-                            </span>
+                  {loadingSessions ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : sessions.length > 0 ? (
+                    sessions.map((session) => {
+                      const DeviceIcon = getDeviceIcon(session.device_info);
+                      return (
+                        <div key={session.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                          <div className="flex items-center gap-3">
+                            <DeviceIcon className="w-5 h-5 text-muted-foreground" />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-foreground">{session.device_info}</p>
+                                {session.is_current && (
+                                  <span className="px-2 py-0.5 rounded-full bg-success/10 text-success text-xs">
+                                    This device
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                {session.ip_address && <span>{session.ip_address}</span>}
+                                <span>
+                                  {new Date(session.created_at).toLocaleDateString()} at{' '}
+                                  {new Date(session.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          {!session.is_current && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => handleRevokeSession(session.id)}
+                            >
+                              Revoke
+                            </Button>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">{session.location}</p>
+                      );
+                    })
+                  ) : (
+                    <p className="text-center py-4 text-muted-foreground">No active sessions</p>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {activeSection === 'billing' && (() => {
+            const planName = (user as any)?.plan_name || (user as any)?.plan || 'Free';
+            const plan = (user as any)?.plan || 'free';
+            const quotaLimit = (user as any)?.quota_limit || 500;
+            const usageCount = (user as any)?.usage_count || 0;
+            const memberCount = (user as any)?.member_count || 1;
+            const planLimits = (user as any)?.plan_limits || {};
+            const memberLimit = planLimits.member_limit;
+            const usagePercent = quotaLimit > 0 ? Math.round((usageCount / quotaLimit) * 100) : 0;
+
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-6"
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Current Plan</CardTitle>
+                    <CardDescription>Your workspace plan and limits</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <Zap className="w-8 h-8 text-primary" />
+                          <div>
+                            <p className="font-semibold text-foreground">{planName} Plan</p>
+                            <p className="text-sm text-muted-foreground capitalize">{plan} tier</p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="capitalize">{plan}</Badge>
                       </div>
-                      {!session.current && (
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                          Revoke
-                        </Button>
+                      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border">
+                        <div>
+                          <p className="text-2xl font-bold text-foreground">{quotaLimit.toLocaleString()}</p>
+                          <p className="text-sm text-muted-foreground">Requests/mo</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-foreground">
+                            {memberLimit != null ? memberLimit : 'Unlimited'}
+                          </p>
+                          <p className="text-sm text-muted-foreground">Team members</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-foreground">
+                            {planLimits.log_retention_days || 1}d
+                          </p>
+                          <p className="text-sm text-muted-foreground">Log retention</p>
+                        </div>
+                      </div>
+                      {(planLimits.request_tracing || planLimits.webhooks) && (
+                        <div className="flex gap-2 pt-3 mt-3 border-t border-border">
+                          {planLimits.request_tracing && (
+                            <Badge variant="outline" className="text-xs">Request Tracing</Badge>
+                          )}
+                          {planLimits.webhooks && (
+                            <Badge variant="outline" className="text-xs">Webhooks</Badge>
+                          )}
+                        </div>
                       )}
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
+                  </CardContent>
+                </Card>
 
-          {activeSection === 'billing' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle>Current Plan</CardTitle>
-                  <CardDescription>Manage your subscription</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <Zap className="w-8 h-8 text-primary" />
-                        <div>
-                          <p className="font-semibold text-foreground">Team Plan</p>
-                          <p className="text-sm text-muted-foreground">$99/month • Billed monthly</p>
-                        </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Usage This Month</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-foreground">API Requests</span>
+                        <span className="text-sm text-muted-foreground">
+                          {usageCount.toLocaleString()} / {quotaLimit.toLocaleString()}
+                        </span>
                       </div>
-                      <Button variant="outline">Upgrade</Button>
+                      <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            usagePercent > 90 ? 'bg-destructive' : usagePercent > 70 ? 'bg-accent' : 'bg-primary'
+                          }`}
+                          style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{usagePercent}% used</p>
                     </div>
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border">
-                      <div>
-                        <p className="text-2xl font-bold text-foreground">10</p>
-                        <p className="text-sm text-muted-foreground">Servers</p>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-foreground">Team Members</span>
+                        <span className="text-sm text-muted-foreground">
+                          {memberCount}{memberLimit != null ? ` / ${memberLimit}` : ''}
+                        </span>
                       </div>
-                      <div>
-                        <p className="text-2xl font-bold text-foreground">100K</p>
-                        <p className="text-sm text-muted-foreground">Requests/mo</p>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-foreground">5</p>
-                        <p className="text-sm text-muted-foreground">Team members</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Usage This Month</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {[
-                    { label: 'Servers', used: 7, limit: 10 },
-                    { label: 'Requests', used: 68000, limit: 100000, format: (n: number) => `${(n / 1000).toFixed(0)}K` },
-                    { label: 'Storage', used: 2.4, limit: 10, format: (n: number) => `${n}GB` },
-                  ].map((item) => {
-                    const percentage = (item.used / item.limit) * 100;
-                    const format = item.format || ((n: number) => n.toString());
-                    return (
-                      <div key={item.label}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-foreground">{item.label}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {format(item.used)} / {format(item.limit)}
-                          </span>
-                        </div>
+                      {memberLimit != null && (
                         <div className="h-2 rounded-full bg-secondary overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${percentage > 90 ? 'bg-destructive' : percentage > 70 ? 'bg-accent' : 'bg-primary'
-                              }`}
-                            style={{ width: `${percentage}%` }}
+                            className={`h-full rounded-full transition-all ${
+                              memberCount >= memberLimit ? 'bg-destructive' : 'bg-primary'
+                            }`}
+                            style={{ width: `${Math.min((memberCount / memberLimit) * 100, 100)}%` }}
                           />
                         </div>
-                      </div>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })()}
 
           {activeSection === 'api' && (
             <motion.div

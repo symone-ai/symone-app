@@ -812,6 +812,10 @@ async function userRequest<T>(
   if (!response.ok) {
     // Handle token expiration/invalid token errors
     if (response.status === 401 || response.status === 403) {
+      if (response.status === 403 && (data.detail === "Service temporarily unavailable for maintenance")) {
+        // Should be 503, but if it was 403? 
+        // Middleware returns 503.
+      }
       const errorMessage = data.detail || data.message || '';
       if (errorMessage.toLowerCase().includes('token') || errorMessage.toLowerCase().includes('unauthorized')) {
         console.log('[API] User token expired or invalid, redirecting to login...');
@@ -819,6 +823,10 @@ async function userRequest<T>(
         window.location.href = '/login';
         throw new ApiError(response.status, 'Session expired, redirecting to login...', data);
       }
+    }
+
+    if (response.status === 503) {
+      window.dispatchEvent(new CustomEvent('maintenance_mode_active'));
     }
 
     throw new ApiError(
@@ -975,7 +983,7 @@ export const user = {
     return await userRequest<{
       success: boolean;
       message: string;
-      member: { id: string; email: string; role: string; status: string };
+      invite?: { id: string; email: string; role: string; status: string; token: string; invite_link: string; expires_at: string };
     }>('/auth/dashboard/team/invite', {
       method: 'POST',
       body: JSON.stringify({ email, role }),
@@ -1089,6 +1097,242 @@ export const user = {
 
   isAuthenticated: () => {
     return !!userStorage.getToken();
+  },
+
+  // Workspace Management
+  listWorkspaces: async () => {
+    const response = await userRequest<{
+      success: boolean;
+      teams: Array<{ id: string; name: string; plan: string; role: string }>;
+      active_team_id: string | null;
+    }>('/auth/workspaces');
+    return response;
+  },
+
+  switchTeam: async (teamId: string) => {
+    const response = await userRequest<{
+      success: boolean;
+      team: { id: string; name: string; plan: string; role: string; api_key?: string; description?: string };
+    }>('/auth/switch-team', {
+      method: 'POST',
+      body: JSON.stringify({ team_id: teamId }),
+    });
+    return response.team;
+  },
+
+  createWorkspace: async (name: string) => {
+    const response = await userRequest<{
+      success: boolean;
+      team: { id: string; name: string; plan: string; role: string; api_key?: string };
+    }>('/auth/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+    return response.team;
+  },
+
+  setupTeam: async (teamName: string, description?: string) => {
+    const response = await userRequest<{
+      success: boolean;
+      team_name: string;
+      message: string;
+    }>('/auth/setup-team', {
+      method: 'PUT',
+      body: JSON.stringify({ team_name: teamName, description }),
+    });
+    return response;
+  },
+
+  getWorkspaceSettings: async () => {
+    const response = await userRequest<{
+      success: boolean;
+      workspace: {
+        id: string;
+        name: string;
+        plan: string;
+        quota_limit: number;
+        usage_count: number;
+        description: string;
+        member_count: number;
+        created_at: string;
+        role: string;
+      };
+    }>('/auth/dashboard/workspace');
+    return response.workspace;
+  },
+
+  updateWorkspaceSettings: async (data: { name?: string; description?: string }) => {
+    const response = await userRequest<{
+      success: boolean;
+      team: { id: string; name: string; plan: string; description: string };
+    }>('/auth/dashboard/workspace', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return response.team;
+  },
+
+  deleteWorkspace: async () => {
+    const response = await userRequest<{
+      success: boolean;
+      message: string;
+      new_active_team_id: string | null;
+    }>('/auth/dashboard/workspace', { method: 'DELETE' });
+    return response;
+  },
+
+  leaveWorkspace: async () => {
+    const response = await userRequest<{
+      success: boolean;
+      message: string;
+      new_active_team_id: string | null;
+    }>('/auth/dashboard/workspace/leave', { method: 'POST' });
+    return response;
+  },
+
+  // Password Reset
+  forgotPassword: async (email: string) => {
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'Failed to send reset email');
+    }
+    return response.json();
+  },
+
+  resetPassword: async (token: string, newPassword: string) => {
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'Failed to reset password');
+    }
+    return response.json();
+  },
+
+  // Session Management
+  listSessions: async () => {
+    const response = await userRequest<{
+      sessions: Array<{
+        id: string;
+        device_info: string;
+        ip_address: string | null;
+        user_agent: string | null;
+        created_at: string;
+        last_active_at: string;
+        is_current: boolean;
+      }>;
+    }>('/auth/sessions');
+    return response.sessions || [];
+  },
+
+  revokeSession: async (sessionId: string) => {
+    return userRequest<{ success: boolean }>(`/auth/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  revokeOtherSessions: async () => {
+    return userRequest<{ success: boolean; revoked_count: number }>('/auth/sessions/other', {
+      method: 'DELETE',
+    });
+  },
+
+  // Invite Management
+  listPendingInvites: async () => {
+    return userRequest<{
+      success: boolean; invites: Array<{
+        id: string; email: string; role: string; status: string;
+        invited_by: string; expires_at: string; created_at: string;
+      }>
+    }>('/auth/dashboard/team/invites');
+  },
+
+  cancelInvite: async (inviteId: string) => {
+    return userRequest<{ success: boolean; message: string }>(
+      `/auth/dashboard/team/invites/${inviteId}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  resendInvite: async (inviteId: string) => {
+    return userRequest<{ success: boolean; message: string; token: string }>(
+      `/auth/dashboard/team/invites/${inviteId}/resend`,
+      { method: 'POST' }
+    );
+  },
+
+  validateInvite: async (token: string) => {
+    const response = await fetch(`${API_BASE_URL}/auth/invite/${token}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Invalid invite');
+    return data;
+  },
+
+  acceptInvite: async (token: string, name?: string, password?: string) => {
+    const body: Record<string, string> = {};
+    if (name) body.name = name;
+    if (password) body.password = password;
+    const response = await fetch(`${API_BASE_URL}/auth/invite/${token}/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to accept invite');
+    return data;
+  },
+
+  // Notifications
+  listNotifications: async (limit = 20, offset = 0) => {
+    return userRequest<{
+      success: boolean; notifications: Array<{
+        id: string; team_id: string; type: string; title: string;
+        message: string; read: boolean; action_url: string | null; created_at: string;
+      }>
+    }>(`/auth/notifications?limit=${limit}&offset=${offset}`);
+  },
+
+  getUnreadNotificationCount: async () => {
+    return userRequest<{ success: boolean; count: number }>('/auth/notifications/unread-count');
+  },
+
+  markNotificationRead: async (notificationId: string) => {
+    return userRequest<{ success: boolean }>(
+      `/auth/notifications/${notificationId}/read`,
+      { method: 'PUT' }
+    );
+  },
+
+  markAllNotificationsRead: async () => {
+    return userRequest<{ success: boolean }>('/auth/notifications/read-all', {
+      method: 'PUT',
+    });
+  },
+
+  dismissNotification: async (notificationId: string) => {
+    return userRequest<{ success: boolean }>(
+      `/auth/notifications/${notificationId}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  // Ownership Transfer
+  transferOwnership: async (newOwnerId: string) => {
+    return userRequest<{ success: boolean; message: string }>(
+      '/auth/dashboard/team/transfer-ownership',
+      {
+        method: 'POST',
+        body: JSON.stringify({ new_owner_id: newOwnerId }),
+      }
+    );
   },
 
   // API Keys Management
@@ -1368,6 +1612,23 @@ export const user = {
       total: number;
     }>(`/auth/dashboard/scheduled-jobs/${jobId}/history?limit=${limit}`);
   },
+
+  // MCP Connection
+  getMcpConnectionInfo: async () => {
+    return await userRequest<McpConnectionInfo>('/auth/dashboard/mcp-connection');
+  },
+
+  updateMcpMode: async (mode: string, serverId?: string) => {
+    return await userRequest<{
+      success: boolean;
+      scope: 'workspace' | 'server';
+      mode: string;
+      server_id?: string;
+    }>('/auth/dashboard/mcp-mode', {
+      method: 'PUT',
+      body: JSON.stringify({ mode, server_id: serverId }),
+    });
+  },
 };
 
 // Scheduled Job Types
@@ -1395,6 +1656,25 @@ export interface JobExecution {
   status: 'pending' | 'running' | 'success' | 'error';
   duration_ms?: number;
   error_message?: string;
+}
+
+export interface McpConnectionInfo {
+  success: boolean;
+  connection_url: string;
+  api_keys: Array<{ id: string; name: string; created_at?: string }>;
+  enabled_servers: Array<{
+    id: string;
+    type: string;
+    name: string;
+    status: string;
+    tool_count: number;
+    mcp_mode?: string | null;
+  }>;
+  current_mode: 'standard' | 'optimized' | 'advanced';
+  total_tools: number;
+  estimated_tokens: { standard: number; optimized: number; advanced: number };
+  agent_configs: Record<string, any>;
+  workspace_name: string;
 }
 
 // ============================================================================

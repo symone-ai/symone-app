@@ -22,8 +22,18 @@ import Replay from "./pages/dashboard/Replay";
 import Marketplace from "./pages/dashboard/Marketplace";
 import DeployServer from "./pages/dashboard/DeployServer";
 import ScheduledJobs from "./pages/dashboard/ScheduledJobs";
+import WorkspaceSettings from "./pages/dashboard/WorkspaceSettings";
+import Connections from "./pages/dashboard/Connections";
+import SetupTeam from "./pages/SetupTeam";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import AcceptInvite from "./pages/AcceptInvite";
+import TermsOfService from "./pages/legal/TermsOfService";
+import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
 import NotFound from "./pages/NotFound";
 import UserProtectedRoute from "./components/UserProtectedRoute";
+import CookieConsent from "./components/CookieConsent";
+import MaintenanceOverlay from "./components/MaintenanceOverlay";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +42,7 @@ const AppApp = () => (
         <TooltipProvider>
             <Toaster />
             <Sonner />
+            <MaintenanceOverlay />
             <BrowserRouter>
                 <Routes>
                     {/* Marketing pages */}
@@ -43,12 +54,23 @@ const AppApp = () => (
                     <Route path="/signup" element={<SignUp />} />
                     <Route path="/signin" element={<SignIn />} />
                     <Route path="/login" element={<Login />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/invite/:token" element={<AcceptInvite />} />
+                    <Route path="/terms" element={<TermsOfService />} />
+                    <Route path="/privacy" element={<PrivacyPolicy />} />
+
+                    {/* Post-signup team setup */}
+                    <Route element={<UserProtectedRoute />}>
+                        <Route path="/setup" element={<SetupTeam />} />
+                    </Route>
 
                     {/* Dashboard Routes */}
                     <Route element={<UserProtectedRoute />}>
                         <Route path="/dashboard" element={<DashboardLayout><Overview /></DashboardLayout>} />
                         <Route path="/dashboard/servers" element={<DashboardLayout><Servers /></DashboardLayout>} />
                         <Route path="/dashboard/servers/deploy" element={<DashboardLayout><DeployServer /></DashboardLayout>} />
+                        <Route path="/dashboard/connections" element={<DashboardLayout><Connections /></DashboardLayout>} />
                         <Route path="/dashboard/activity" element={<DashboardLayout><Activity /></DashboardLayout>} />
                         <Route path="/dashboard/secrets" element={<DashboardLayout><Secrets /></DashboardLayout>} />
                         <Route path="/dashboard/team" element={<DashboardLayout><Team /></DashboardLayout>} />
@@ -56,10 +78,12 @@ const AppApp = () => (
                         <Route path="/dashboard/replay" element={<DashboardLayout><Replay /></DashboardLayout>} />
                         <Route path="/dashboard/marketplace" element={<DashboardLayout><Marketplace /></DashboardLayout>} />
                         <Route path="/dashboard/scheduled-jobs" element={<DashboardLayout><ScheduledJobs /></DashboardLayout>} />
+                        <Route path="/dashboard/workspace" element={<DashboardLayout><WorkspaceSettings /></DashboardLayout>} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />
                 </Routes>
+                <CookieConsent />
             </BrowserRouter>
         </TooltipProvider>
     </QueryClientProvider>

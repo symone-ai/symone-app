@@ -18,6 +18,8 @@ import {
   CreditCard,
   HelpCircle,
   Clock,
+  Building2,
+  Plug,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +33,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { NotificationsPopover } from '@/components/dashboard/NotificationsPopover';
 import { UpgradeModal, useUpgradeModal } from '@/components/dashboard/UpgradeModal';
+import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { useUser } from '@/hooks/useSymoneData';
 import { api } from '@/lib/api';
 
@@ -41,6 +44,7 @@ interface DashboardLayoutProps {
 const sidebarItems = [
   { id: 'overview', label: 'Overview', icon: BarChart3, path: '/dashboard' },
   { id: 'servers', label: 'Servers', icon: Server, path: '/dashboard/servers' },
+  { id: 'connections', label: 'Connections', icon: Plug, path: '/dashboard/connections' },
   { id: 'marketplace', label: 'Marketplace', icon: Store, path: '/dashboard/marketplace' },
   { id: 'scheduled-jobs', label: 'Scheduled Jobs', icon: Clock, path: '/dashboard/scheduled-jobs' },
   { id: 'activity', label: 'Activity', icon: Activity, path: '/dashboard/activity' },
@@ -48,6 +52,7 @@ const sidebarItems = [
   { id: 'secrets', label: 'Secrets', icon: Key, path: '/dashboard/secrets' },
   { id: 'team', label: 'Team', icon: Users, path: '/dashboard/team' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/dashboard/settings' },
+  { id: 'workspace', label: 'Workspace', icon: Building2, path: '/dashboard/workspace' },
 ];
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
@@ -93,6 +98,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 Symone<span className="text-primary">MCP</span>
               </span>
             </Link>
+          </div>
+
+          {/* Workspace Switcher */}
+          <div className="px-3 py-2 border-b border-sidebar-border">
+            <WorkspaceSwitcher />
           </div>
 
           {/* Navigation */}

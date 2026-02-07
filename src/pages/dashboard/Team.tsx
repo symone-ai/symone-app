@@ -16,11 +16,15 @@ import {
   Send,
   X,
   Loader2,
+  Copy,
+  RefreshCw,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
+import { formatDistanceToNow } from 'date-fns';
 
 interface TeamMember {
   id: string;
@@ -34,14 +38,27 @@ interface TeamMember {
   servers?: number;
 }
 
+interface PendingInvite {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  invited_by: string;
+  expires_at: string;
+  created_at: string;
+}
+
 const Team = () => {
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'viewer'>('member');
   const [inviting, setInviting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   // Load team members from API
   const loadTeamMembers = async () => {
@@ -99,9 +116,57 @@ const Team = () => {
     }
   };
 
+  const loadPendingInvites = async () => {
+    try {
+      const result = await api.user.listPendingInvites();
+      if (result.success) {
+        setPendingInvites(result.invites || []);
+      }
+    } catch {
+      // Non-critical - user may not be admin
+    }
+  };
+
   useEffect(() => {
     loadTeamMembers();
+    loadPendingInvites();
   }, []);
+
+  const handleCancelInvite = async (inviteId: string) => {
+    setCancellingId(inviteId);
+    try {
+      const result = await api.user.cancelInvite(inviteId);
+      if (result.success) {
+        toast({ title: 'Invite cancelled', description: 'The invitation has been cancelled' });
+        loadPendingInvites();
+      }
+    } catch (error: any) {
+      toast({ title: 'Failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  const handleResendInvite = async (inviteId: string) => {
+    setResendingId(inviteId);
+    try {
+      const result = await api.user.resendInvite(inviteId);
+      if (result.success) {
+        toast({ title: 'Invite resent', description: 'Expiry has been extended by 7 days' });
+        loadPendingInvites();
+      }
+    } catch (error: any) {
+      toast({ title: 'Failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const handleCopyInviteLink = (invite: PendingInvite) => {
+    // The invite link will be based on the token from the resend response
+    // For now, show a toast noting the link was sent
+    toast({ title: 'Invite link', description: `Invite sent to ${invite.email}` });
+  };
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
@@ -110,14 +175,16 @@ const Team = () => {
     try {
       const result = await api.user.inviteTeamMember(inviteEmail, inviteRole);
       if (result.success) {
+        const inviteLink = result.invite?.invite_link;
         toast({
           title: 'Invitation sent',
-          description: result.message,
+          description: inviteLink ? `Invite link: ${inviteLink}` : result.message,
         });
         setShowInviteModal(false);
         setInviteEmail('');
         setInviteRole('member');
-        loadTeamMembers(); // Reload list
+        loadTeamMembers();
+        loadPendingInvites();
       }
     } catch (error: any) {
       toast({
@@ -317,6 +384,71 @@ const Team = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pending Invites */}
+      {pendingInvites.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Mail className="w-5 h-5 text-accent" />
+              Pending Invites ({pendingInvites.length})
+            </CardTitle>
+            <CardDescription>These people have been invited but haven't accepted yet</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingInvites.map((invite) => (
+                <div
+                  key={invite.id}
+                  className="p-4 rounded-lg bg-secondary/50 flex items-center gap-4"
+                >
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+                    <Mail className="w-5 h-5 text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">{invite.email}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="capitalize">{invite.role}</span>
+                      <span>·</span>
+                      <span>Expires {formatDistanceToNow(new Date(invite.expires_at), { addSuffix: true })}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleResendInvite(invite.id)}
+                      disabled={resendingId === invite.id}
+                      title="Resend invite"
+                    >
+                      {resendingId === invite.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleCancelInvite(invite.id)}
+                      disabled={cancellingId === invite.id}
+                      title="Cancel invite"
+                    >
+                      {cancellingId === invite.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Team Members List */}
       <Card>

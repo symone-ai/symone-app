@@ -22,6 +22,7 @@ const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tosAccepted, setTosAccepted] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -41,8 +42,8 @@ const SignUp = () => {
       userStorage.setToken(response.token);
       localStorage.setItem('symone_user', JSON.stringify(response.user));
 
-      // Redirect to dashboard
-      navigate('/dashboard');
+      // Redirect to team setup screen
+      navigate('/setup');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
@@ -191,28 +192,37 @@ const SignUp = () => {
                   </p>
                 </div>
 
+                {/* TOS Checkbox */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={tosAccepted}
+                    onChange={(e) => setTosAccepted(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded border-border accent-primary"
+                  />
+                  <span className="text-xs text-muted-foreground leading-relaxed">
+                    I agree to the{' '}
+                    <Link to="/terms" className="text-primary hover:underline" target="_blank">
+                      Terms of Service
+                    </Link>{' '}
+                    and{' '}
+                    <Link to="/privacy" className="text-primary hover:underline" target="_blank">
+                      Privacy Policy
+                    </Link>
+                  </span>
+                </label>
+
                 {error && (
                   <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
                     {error}
                   </div>
                 )}
 
-                <Button type="submit" variant="hero" className="w-full" disabled={loading}>
+                <Button type="submit" variant="hero" className="w-full" disabled={loading || !tosAccepted}>
                   {loading ? 'Creating Account...' : 'Create Account'}
                   {!loading && <ArrowRight className="ml-2 w-4 h-4" />}
                 </Button>
               </form>
-
-              <p className="text-xs text-muted-foreground text-center">
-                By signing up, you agree to our{' '}
-                <Link to="/terms" className="text-primary hover:underline">
-                  Terms of Service
-                </Link>{' '}
-                and{' '}
-                <Link to="/privacy" className="text-primary hover:underline">
-                  Privacy Policy
-                </Link>
-              </p>
 
               <div className="pt-4 border-t border-border text-center">
                 <p className="text-sm text-muted-foreground">
