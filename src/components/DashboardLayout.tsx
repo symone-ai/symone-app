@@ -50,7 +50,6 @@ const sidebarItems = [
   { id: 'activity', label: 'Activity', icon: Activity, path: '/dashboard/activity' },
   { id: 'replay', label: 'Session Replay', icon: Eye, path: '/dashboard/replay' },
   { id: 'secrets', label: 'Secrets', icon: Key, path: '/dashboard/secrets' },
-  { id: 'team', label: 'Team', icon: Users, path: '/dashboard/team' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/dashboard/settings' },
   { id: 'workspace', label: 'Workspace', icon: Building2, path: '/dashboard/workspace' },
 ];
@@ -77,9 +76,19 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     return location.pathname.startsWith(path);
   };
 
-  const handleSignOut = () => {
-    // Handle sign out - would integrate with auth
-    navigate('/');
+  const handleSignOut = async () => {
+    // Call logout API and clear local storage
+    try {
+      await api.user.logout();
+    } catch (error) {
+      // Even if API call fails, clear local storage and redirect
+      console.log('Logout API call failed, clearing local storage anyway');
+    }
+    // Clear all user data from localStorage
+    localStorage.removeItem('symone_user');
+    localStorage.removeItem('symone_user_token');
+    // Redirect to login
+    navigate('/login');
   };
 
   return (

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Settings2,
   Save,
@@ -18,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { user as userApi, api } from '@/lib/api';
 import { toast } from 'sonner';
+import { WorkspaceMembers } from '@/components/workspace/WorkspaceMembers';
 
 interface TeamMember {
   id: string;
@@ -49,11 +50,10 @@ interface WorkspaceData {
   description: string;
   member_count: number;
   created_at: string;
-  role: string;
+  role: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
 export default function WorkspaceSettings() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
@@ -70,7 +70,10 @@ export default function WorkspaceSettings() {
   const loadWorkspace = async () => {
     try {
       const data = await userApi.getWorkspaceSettings();
-      setWorkspace(data);
+      setWorkspace({
+        ...data,
+        role: (data.role as WorkspaceData['role']) || 'member'
+      });
       setName(data.name);
       setDescription(data.description || '');
 
@@ -130,7 +133,6 @@ export default function WorkspaceSettings() {
     try {
       const result = await userApi.deleteWorkspace();
       toast.success('Workspace deleted');
-      // Reload to switch to the new active workspace
       window.location.href = '/dashboard';
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete workspace');
@@ -167,11 +169,11 @@ export default function WorkspaceSettings() {
   const isAdmin = workspace.role === 'admin' || isOwner;
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-bold">Workspace Settings</h1>
         <p className="text-muted-foreground">
-          Manage your workspace configuration and preferences
+          Manage your workspace configuration and team
         </p>
       </div>
 
@@ -208,202 +210,219 @@ export default function WorkspaceSettings() {
         </Card>
       </div>
 
-      {/* General Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings2 className="w-5 h-5" />
-            General
-          </CardTitle>
-          <CardDescription>
-            Basic workspace information
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="ws-name">Workspace Name</Label>
-            <Input
-              id="ws-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={!isAdmin}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ws-desc">Description</Label>
-            <Textarea
-              id="ws-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this workspace for?"
-              rows={3}
-              disabled={!isAdmin}
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="space-y-1">
-              <Label>Plan</Label>
-              <div>
-                <Badge variant="outline" className="capitalize">
-                  {workspace.plan}
-                </Badge>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Usage</Label>
-              <p className="text-sm text-muted-foreground">
-                {workspace.usage_count.toLocaleString()} / {workspace.quota_limit.toLocaleString()} requests
-              </p>
-            </div>
-          </div>
+      <Tabs defaultValue="general" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="danger" className="text-destructive">Danger Zone</TabsTrigger>
+        </TabsList>
 
-          {isAdmin && (
-            <Button
-              onClick={handleSave}
-              disabled={saving || name.trim().length < 2}
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4 mr-2" />
-              )}
-              Save Changes
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Danger Zone */}
-      <Card className="border-destructive/20">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="w-5 h-5" />
-            Danger Zone
-          </CardTitle>
-          <CardDescription>
-            Irreversible actions for this workspace
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isOwner && (
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">Leave Workspace</p>
-                <p className="text-sm text-muted-foreground">
-                  Remove yourself from this workspace
-                </p>
+        {/* General Tab */}
+        <TabsContent value="general" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings2 className="w-5 h-5" />
+                General Settings
+              </CardTitle>
+              <CardDescription>
+                Basic workspace information
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="ws-name">Workspace Name</Label>
+                <Input
+                  id="ws-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={!isAdmin}
+                />
               </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline">
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Leave
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Leave workspace?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      You will lose access to all servers, secrets, and data in "{workspace.name}".
-                      You'll need a new invitation to rejoin.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleLeave} className="bg-destructive text-destructive-foreground">
-                      Leave Workspace
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
-
-          {isOwner && teamMembers.length > 0 && (
-            <div className="p-4 border rounded-lg space-y-3">
-              <div>
-                <p className="font-medium flex items-center gap-2">
-                  <ArrowRightLeft className="w-4 h-4" />
-                  Transfer Ownership
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Transfer workspace ownership to another team member. You'll become an admin.
-                </p>
+              <div className="space-y-2">
+                <Label htmlFor="ws-desc">Description</Label>
+                <Textarea
+                  id="ws-desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What is this workspace for?"
+                  rows={3}
+                  disabled={!isAdmin}
+                />
               </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={transferTarget}
-                  onChange={(e) => setTransferTarget(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm"
+              <div className="flex items-center gap-6">
+                <div className="space-y-1">
+                  <Label>Plan</Label>
+                  <div>
+                    <Badge variant="outline" className="capitalize">
+                      {workspace.plan}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Usage</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {workspace.usage_count.toLocaleString()} / {workspace.quota_limit.toLocaleString()} requests
+                  </p>
+                </div>
+              </div>
+
+              {isAdmin && (
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || name.trim().length < 2}
                 >
-                  <option value="">Select a team member...</option>
-                  {teamMembers.map((m) => (
-                    <option key={m.user_id || m.id} value={m.user_id || m.id}>
-                      {m.name} ({m.email}) - {m.role}
-                    </option>
-                  ))}
-                </select>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" disabled={!transferTarget || transferring}>
-                      {transferring ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Transfer'}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Transfer ownership?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will make the selected member the new owner of "{workspace.name}".
-                        Your role will be changed to admin. This action is irreversible without the new owner's consent.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleTransferOwnership}>
-                        Transfer Ownership
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
-          )}
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save Changes
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {isOwner && (
-            <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg">
-              <div>
-                <p className="font-medium text-destructive">Delete Workspace</p>
-                <p className="text-sm text-muted-foreground">
-                  Permanently delete this workspace and all its data
-                </p>
-              </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete workspace?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete "{workspace.name}" and all associated data including
-                      servers, secrets, activity logs, and team memberships. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-                      Delete Permanently
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {/* Members Tab */}
+        <TabsContent value="members">
+          <WorkspaceMembers userRole={workspace.role} />
+        </TabsContent>
+
+        {/* Danger Zone Tab */}
+        <TabsContent value="danger" className="space-y-6">
+          <Card className="border-destructive/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="w-5 h-5" />
+                Danger Zone
+              </CardTitle>
+              <CardDescription>
+                Irreversible actions for this workspace
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isOwner && (
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">Leave Workspace</p>
+                    <p className="text-sm text-muted-foreground">
+                      Remove yourself from this workspace
+                    </p>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline">
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Leave
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Leave workspace?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          You will lose access to all servers, secrets, and data in "{workspace.name}".
+                          You'll need a new invitation to rejoin.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleLeave} className="bg-destructive text-destructive-foreground">
+                          Leave Workspace
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+
+              {isOwner && teamMembers.length > 0 && (
+                <div className="p-4 border rounded-lg space-y-3">
+                  <div>
+                    <p className="font-medium flex items-center gap-2">
+                      <ArrowRightLeft className="w-4 h-4" />
+                      Transfer Ownership
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Transfer workspace ownership to another team member. You'll become an admin.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={transferTarget}
+                      onChange={(e) => setTransferTarget(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm"
+                    >
+                      <option value="">Select a team member...</option>
+                      {teamMembers.map((m) => (
+                        <option key={m.user_id || m.id} value={m.user_id || m.id}>
+                          {m.name} ({m.email}) - {m.role}
+                        </option>
+                      ))}
+                    </select>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" disabled={!transferTarget || transferring}>
+                          {transferring ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Transfer'}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Transfer ownership?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will make the selected member the new owner of "{workspace.name}".
+                            Your role will be changed to admin. This action is irreversible without the new owner's consent.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleTransferOwnership}>
+                            Transfer Ownership
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              )}
+
+              {isOwner && (
+                <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg">
+                  <div>
+                    <p className="font-medium text-destructive">Delete Workspace</p>
+                    <p className="text-sm text-muted-foreground">
+                      Permanently delete this workspace and all its data
+                    </p>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive">
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete workspace?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete "{workspace.name}" and all associated data including
+                          servers, secrets, activity logs, and team memberships. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+                          Delete Permanently
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

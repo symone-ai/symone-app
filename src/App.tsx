@@ -16,7 +16,6 @@ import Overview from "./pages/dashboard/Overview";
 import Servers from "./pages/dashboard/Servers";
 import Activity from "./pages/dashboard/Activity";
 import Secrets from "./pages/dashboard/Secrets";
-import Team from "./pages/dashboard/Team";
 import Settings from "./pages/dashboard/Settings";
 import Replay from "./pages/dashboard/Replay";
 import Marketplace from "./pages/dashboard/Marketplace";
@@ -83,7 +82,6 @@ const AppApp = () => (
                         <Route path="/dashboard/connections" element={<DashboardLayout><Connections /></DashboardLayout>} />
                         <Route path="/dashboard/activity" element={<DashboardLayout><Activity /></DashboardLayout>} />
                         <Route path="/dashboard/secrets" element={<DashboardLayout><Secrets /></DashboardLayout>} />
-                        <Route path="/dashboard/team" element={<DashboardLayout><Team /></DashboardLayout>} />
                         <Route path="/dashboard/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
                         <Route path="/dashboard/replay" element={<DashboardLayout><Replay /></DashboardLayout>} />
                         <Route path="/dashboard/marketplace" element={<DashboardLayout><Marketplace /></DashboardLayout>} />
