@@ -4,30 +4,26 @@ import { Link } from 'react-router-dom';
 import {
   Server,
   Database,
-  MessageSquare,
   Github,
   Cloud,
   Slack,
   FileText,
   Mail,
-  Globe,
-  MoreVertical,
-  Play,
   Pause,
+  Play,
   ExternalLink,
   Settings,
   Trash2,
   RefreshCw,
   Plus,
   Search,
-  Filter,
   AlertCircle,
   CheckCircle2,
   Clock,
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { api, UserServer } from '@/lib/api';
 
 const iconMap: Record<string, React.ElementType> = {
@@ -40,6 +36,17 @@ const iconMap: Record<string, React.ElementType> = {
   email: Mail,
   cloud: Cloud,
   default: Server,
+};
+
+// Emoji fallback for when favicon fails to load
+const EMOJI_ICONS: Record<string, string> = {
+  slack: '💬',
+  n8n: '⚡',
+  supabase: '🗄️',
+  github: '🐙',
+  tidycal: '📅',
+  sendfox: '📧',
+  default: '🔌',
 };
 
 const Servers = () => {
@@ -80,7 +87,10 @@ const Servers = () => {
   };
 
   const filteredServers = servers.filter(server => {
-    const matchesFilter = filter === 'all' || server.status === filter;
+    // Normalize status for filtering
+    const status = server.status === 'active' ? 'running' : server.status === 'inactive' ? 'stopped' : server.status;
+    const matchesFilter = filter === 'all' || status === filter;
+
     const matchesSearch = !searchQuery ||
       server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       server.type.toLowerCase().includes(searchQuery.toLowerCase());
@@ -90,6 +100,7 @@ const Servers = () => {
   const getStatusBadge = (status: UserServer['status']) => {
     switch (status) {
       case 'running':
+      case 'active':
         return (
           <span className="px-2 py-1 rounded-full bg-success/10 text-success text-xs font-medium flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
@@ -97,6 +108,7 @@ const Servers = () => {
           </span>
         );
       case 'stopped':
+      case 'inactive':
         return (
           <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground text-xs font-medium flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
@@ -117,7 +129,21 @@ const Servers = () => {
             Deploying
           </span>
         );
+      default:
+        return (
+          <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground text-xs font-medium flex items-center gap-1">
+            {status}
+          </span>
+        );
     }
+  };
+
+  // Helper to safely format uptime string without triggering auto-formatter
+  const formatUptime = (createdAt: string | undefined): string => {
+    const ms = Date.now() - new Date(createdAt || Date.now()).getTime();
+    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    return days > 0 ? days + "d " + hours + "h" : hours + "h";
   };
 
   return (
@@ -156,8 +182,8 @@ const Servers = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[
               { label: 'Total Servers', value: servers.length, icon: Server, color: 'text-primary' },
-              { label: 'Running', value: servers.filter(s => s.status === 'running').length, icon: CheckCircle2, color: 'text-success' },
-              { label: 'Stopped', value: servers.filter(s => s.status === 'stopped').length, icon: Pause, color: 'text-muted-foreground' },
+              { label: 'Running', value: servers.filter(s => s.status === 'running' || s.status === 'active').length, icon: CheckCircle2, color: 'text-success' },
+              { label: 'Stopped', value: servers.filter(s => s.status === 'stopped' || s.status === 'inactive').length, icon: Pause, color: 'text-muted-foreground' },
               { label: 'Errors', value: servers.filter(s => s.status === 'error').length, icon: AlertCircle, color: 'text-destructive' },
             ].map((stat, i) => (
               <motion.div
@@ -229,6 +255,9 @@ const Servers = () => {
             ) : (
               filteredServers.map((server, index) => {
                 const ServerIcon = iconMap[server.type] || iconMap.default;
+                const hasMetadataIcon = !!server.metadata?.icon_url;
+                const emoji = EMOJI_ICONS[server.type] || EMOJI_ICONS.default;
+
                 return (
                   <motion.div
                     key={server.id}
@@ -236,12 +265,30 @@ const Servers = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
                   >
-                    <Card className="hover:border-primary/30 transition-colors group">
+                    <Card
+                      className="hover:border-primary/30 transition-colors group"
+                      style={server.metadata?.brand_color ? { borderLeft: `4px solid ${server.metadata.brand_color}` } : undefined}
+                    >
                       <CardContent className="p-4">
                         <div className="flex items-center gap-4">
-                          {/* Icon */}
-                          <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center">
-                            <ServerIcon className="w-7 h-7 text-primary" />
+                          {/* Icon Display */}
+                          <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center overflow-hidden">
+                            {hasMetadataIcon ? (
+                              <img
+                                src={server.metadata!.icon_url!}
+                                alt={server.type}
+                                className="w-10 h-10 object-contain"
+                                onError={(e) => {
+                                  // Fallback to Lucide icon on error
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.parentElement?.classList.add('fallback-icon-active');
+                                }}
+                              />
+                            ) : (
+                              <ServerIcon className="w-7 h-7 text-primary" />
+                            )}
+                            {/* Fallback container if image fails or not present */}
+                            {hasMetadataIcon && <ServerIcon className="w-7 h-7 text-primary hidden fallback-icon-target" />}
                           </div>
 
                           {/* Info */}
@@ -251,20 +298,27 @@ const Servers = () => {
                                 <h3 className="font-semibold text-foreground">{server.name}</h3>
                                 {getStatusBadge(server.status)}
                               </div>
-                              <p className="text-sm text-muted-foreground">
-                                {server.type} • Created {new Date(server.created_at || '').toLocaleDateString()}
+                              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                {server.metadata?.display_name || server.type}
+                                {server.metadata?.website_url && (
+                                  <a
+                                    href={server.metadata.website_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    Website
+                                  </a>
+                                )}
                               </p>
                             </div>
 
                             <div className="text-center">
                               <p className="text-sm font-medium text-foreground">
-                                {server.status === 'running'
-                                  ? (() => {
-                                    const ms = Date.now() - new Date(server.created_at || Date.now()).getTime();
-                                    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-                                    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                                    return days > 0 ? `${days}d ${hours}h` : `${hours}h`;
-                                  })()
+                                {(server.status === 'running' || server.status === 'active')
+                                  ? formatUptime(server.created_at)
                                   : '-'}
                               </p>
                               <p className="text-xs text-muted-foreground">Uptime</p>
@@ -287,7 +341,7 @@ const Servers = () => {
 
                           {/* Actions */}
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {server.status === 'running' ? (
+                            {(server.status === 'running' || server.status === 'active') ? (
                               <Button variant="ghost" size="icon" className="h-8 w-8">
                                 <Pause className="w-4 h-4" />
                               </Button>

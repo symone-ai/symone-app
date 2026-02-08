@@ -810,9 +810,16 @@ async function userRequest<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    // Handle token expiration/invalid token errors
-    if (response.status === 401 || response.status === 403) {
-      if (response.status === 403 && (data.detail === "Service temporarily unavailable for maintenance")) {
+    // Handle token expiration/invalid token errors - redirect on ANY 401
+    if (response.status === 401) {
+      console.log('[API] Unauthorized (401), redirecting to login...');
+      userStorage.clearToken();
+      localStorage.removeItem('symone_user');
+      window.location.href = '/login';
+      throw new ApiError(response.status, 'Session expired, redirecting to login...', data);
+    }
+    if (response.status === 403) {
+      if (data.detail === "Service temporarily unavailable for maintenance") {
         // Should be 503, but if it was 403? 
         // Middleware returns 503.
       }
@@ -820,6 +827,7 @@ async function userRequest<T>(
       if (errorMessage.toLowerCase().includes('token') || errorMessage.toLowerCase().includes('unauthorized')) {
         console.log('[API] User token expired or invalid, redirecting to login...');
         userStorage.clearToken();
+        localStorage.removeItem('symone_user');
         window.location.href = '/login';
         throw new ApiError(response.status, 'Session expired, redirecting to login...', data);
       }
@@ -843,10 +851,18 @@ export interface UserServer {
   id: string;
   name: string;
   type: string;
-  status: 'running' | 'stopped' | 'error' | 'deploying';
+  status: 'running' | 'stopped' | 'error' | 'deploying' | 'active' | 'inactive';
   config?: Record<string, any>;
   created_at?: string;
   updated_at?: string;
+  metadata?: {
+    display_name: string;
+    icon_url: string | null;
+    website_url: string;
+    api_docs_url: string;
+    brand_color: string;
+    category: string;
+  };
 }
 
 export interface UserActivityLog {
