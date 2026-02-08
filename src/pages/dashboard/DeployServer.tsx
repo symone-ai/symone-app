@@ -63,6 +63,7 @@ interface DeployableServer {
   description: string;
   category: string;
   icon: string; // Now stores emoji icon from DB
+  iconUrl?: string;
   publisher: string;
   serverType: ServerType;
   executionMode: ExecutionMode;
@@ -133,6 +134,7 @@ const DeployServer = () => {
               description: m.description || '',
               category: m.category,
               icon: m.icon || '🔌',
+              iconUrl: m.icon_url,
               publisher: m.provider === 'official' ? 'Symone' :
                 m.provider === 'partner' ? 'Official Partner' : 'Community',
               serverType: (m.provider as ServerType) || 'community',
@@ -411,8 +413,12 @@ const DeployServer = () => {
                         >
                           <CardContent className="p-5">
                             <div className="flex items-start justify-between mb-3">
-                              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-2xl">
-                                {server.icon}
+                              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-2xl overflow-hidden">
+                                {server.iconUrl ? (
+                                  <img src={server.iconUrl} alt={server.name} className="w-full h-full object-contain p-2" />
+                                ) : (
+                                  server.icon
+                                )}
                               </div>
                               <div className="flex flex-col items-end gap-1">
                                 <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${typeBadge.className}`}>
@@ -492,8 +498,12 @@ const DeployServer = () => {
               <Card className="border-primary/20">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-2xl">
-                      {selectedServer.icon}
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-2xl overflow-hidden">
+                      {selectedServer.iconUrl ? (
+                        <img src={selectedServer.iconUrl} alt={selectedServer.name} className="w-full h-full object-contain p-2" />
+                      ) : (
+                        selectedServer.icon
+                      )}
                     </div>
                     <div>
                       <h3 className="font-semibold text-foreground">{selectedServer.name}</h3>
